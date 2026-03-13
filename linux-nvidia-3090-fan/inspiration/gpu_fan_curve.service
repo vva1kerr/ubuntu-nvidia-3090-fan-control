@@ -1,0 +1,11 @@
+[Unit]
+Description=RTX 3090 Fan Curve Daemon
+After=display-manager.service
+
+[Service]
+ExecStart=/usr/local/bin/gpu_fan_curve.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

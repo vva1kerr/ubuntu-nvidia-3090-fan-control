@@ -1,0 +1,119 @@
+If the temperature is 75°C or higher: The fan speed is set to 100%. This is the maximum speed to ensure maximum cooling when the GPU is running very hot.
+If the temperature is between 70°C and 74°C: The fan speed is set to 90%. This is still a high speed to provide significant cooling while reducing noise slightly compared to full speed.
+If the temperature is between 60°C and 69°C: The fan speed is set to 70%. This provides moderate cooling and helps maintain a balance between performance and noise.
+If the temperature is between 50°C and 59°C: The fan speed is set to 50%. This lower speed is sufficient for cooling when the GPU is not under heavy load, thereby reducing noise and power consumption.
+and normal temperature of the fan is 30°C 
+-------------------------------------------------
+sudo nano /etc/init.d/set_gpu_power_limit.sh
+-------------------------------------------------------------
+#!/bin/bash
+
+LOG_FILE="/var/log/set_gpu_fan_curve.log"
+
+# Ensure DISPLAY and XAUTHORITY are set correctly
+export DISPLAY=:1
+export XAUTHORITY=/var/run/lightdm/root/:0
+
+# Enable persistence mode
+nvidia-smi -pm ENABLED
+
+# Debugging information
+echo "Setting power limit and fan control" | tee -a $LOG_FILE
+echo "DISPLAY: $DISPLAY" | tee -a $LOG_FILE
+echo "XAUTHORITY: $XAUTHORITY" | tee -a $LOG_FILE
+
+# Set power limit
+nvidia-smi -i 0 -pl 320 | tee -a $LOG_FILE
+nvidia-smi -i 1 -pl 320 | tee -a $LOG_FILE
+nvidia-smi -i 2 -pl 320 | tee -a $LOG_FILE
+
+# Set manual fan control
+for i in {0..2}; do
+  nvidia-settings -c $DISPLAY -a "[gpu:$i]/GPUFanControlState=1" | tee -a $LOG_FILE
+done
+
+# Function to determine fan speed based on temperature
+get_fan_speed() {
+  local TEMP=$1
+  local FAN_SPEED=30
+
+  if [ "$TEMP" -ge 75 ]; then
+    FAN_SPEED=100
+  elif [ "$TEMP" -ge 70 ]; then
+    FAN_SPEED=90
+  elif [ "$TEMP" -ge 60 ]; then
+    FAN_SPEED=70
+  elif [ "$TEMP" -ge 50 ]; then
+    FAN_SPEED=50
+  fi
+
+  echo $FAN_SPEED
+}
+
+# Dynamic adjustment loop
+while true; do
+  # Get real temperatures
+  TEMP0=$(nvidia-smi -i 0 --query-gpu=temperature.gpu --format=csv,noheader,nounits)
+  TEMP1=$(nvidia-smi -i 1 --query-gpu=temperature.gpu --format=csv,noheader,nounits)
+  TEMP2=$(nvidia-smi -i 2 --query-gpu=temperature.gpu --format=csv,noheader,nounits)
+
+  echo "TEMP0: $TEMP0" | tee -a $LOG_FILE
+  echo "TEMP1: $TEMP1" | tee -a $LOG_FILE
+  echo "TEMP2: $TEMP2" | tee -a $LOG_FILE
+
+  # Determine fan speeds
+  FAN_SPEED0=$(get_fan_speed $TEMP0)
+  FAN_SPEED1=$(get_fan_speed $TEMP1)
+  FAN_SPEED2=$(get_fan_speed $TEMP2)
+
+  echo "FAN_SPEED0: $FAN_SPEED0" | tee -a $LOG_FILE
+  echo "FAN_SPEED1: $FAN_SPEED1" | tee -a $LOG_FILE
+  echo "FAN_SPEED2: $FAN_SPEED2" | tee -a $LOG_FILE
+
+  # Apply the fan speeds to both fans of each GPU
+  nvidia-settings -c $DISPLAY -a "[fan:0]/GPUTargetFanSpeed=$FAN_SPEED0" | tee -a $LOG_FILE
+  nvidia-settings -c $DISPLAY -a "[fan:1]/GPUTargetFanSpeed=$FAN_SPEED0" | tee -a $LOG_FILE
+  nvidia-settings -c $DISPLAY -a "[fan:2]/GPUTargetFanSpeed=$FAN_SPEED1" | tee -a $LOG_FILE
+  nvidia-settings -c $DISPLAY -a "[fan:3]/GPUTargetFanSpeed=$FAN_SPEED1" | tee -a $LOG_FILE
+  nvidia-settings -c $DISPLAY -a "[fan:4]/GPUTargetFanSpeed=$FAN_SPEED2" | tee -a $LOG_FILE
+  nvidia-settings -c $DISPLAY -a "[fan:5]/GPUTargetFanSpeed=$FAN_SPEED2" | tee -a $LOG_FILE
+
+  # Verify the fan speeds
+  ACTUAL_FAN_SPEED0=$(nvidia-settings -c $DISPLAY -q "[fan:0]/GPUTargetFanSpeed" | grep 'Attribute' | awk '{print $4}')
+  ACTUAL_FAN_SPEED1=$(nvidia-settings -c $DISPLAY -q "[fan:1]/GPUTargetFanSpeed" | grep 'Attribute' | awk '{print $4}')
+  ACTUAL_FAN_SPEED2=$(nvidia-settings -c $DISPLAY -q "[fan:2]/GPUTargetFanSpeed" | grep 'Attribute' | awk '{print $4}')
+  ACTUAL_FAN_SPEED3=$(nvidia-settings -c $DISPLAY -q "[fan:3]/GPUTargetFanSpeed" | grep 'Attribute' | awk '{print $4}')
+  ACTUAL_FAN_SPEED4=$(nvidia-settings -c $DISPLAY -q "[fan:4]/GPUTargetFanSpeed" | grep 'Attribute' | awk '{print $4}')
+  ACTUAL_FAN_SPEED5=$(nvidia-settings -c $DISPLAY -q "[fan:5]/GPUTargetFanSpeed" | grep 'Attribute' | awk '{print $4}')
+
+  echo "ACTUAL_FAN_SPEED0: $ACTUAL_FAN_SPEED0" | tee -a $LOG_FILE
+  echo "ACTUAL_FAN_SPEED1: $ACTUAL_FAN_SPEED1" | tee -a $LOG_FILE
+  echo "ACTUAL_FAN_SPEED2: $ACTUAL_FAN_SPEED2" | tee -a $LOG_FILE
+  echo "ACTUAL_FAN_SPEED3: $ACTUAL_FAN_SPEED3" | tee -a $LOG_FILE
+  echo "ACTUAL_FAN_SPEED4: $ACTUAL_FAN_SPEED4" | tee -a $LOG_FILE
+  echo "ACTUAL_FAN_SPEED5: $ACTUAL_FAN_SPEED5" | tee -a $LOG_FILE
+
+  echo "Power limit and fan control set successfully" | tee -a $LOG_FILE
+
+  # Sleep for 1 second before next check
+  sleep 1
+done
+---------------------------------------------------------------------------------
+sudo chmod +x /etc/init.d/set_gpu_power_limit.sh
+----------------------------------------------------------------------------------
+sudo nano /etc/systemd/system/set_gpu_power_limit.service
+---------------------------------------------------------------
+[Unit]
+Description=Set GPU Power Limit and Fan Curve
+
+[Service]
+ExecStart=/etc/init.d/set_gpu_power_limit.sh
+
+[Install]
+WantedBy=multi-user.target
+-------------------------------------------------------------------
+sudo systemctl daemon-reload
+sudo systemctl start set_gpu_power_limit.service
+sudo systemctl enable set_gpu_power_limit.service
+-----------------------------------------------------------------------
+watch -n 1 'nvidia-smi --query-gpu=index,name,temperature.gpu,fan.speed --format=csv,noheader,nounits'

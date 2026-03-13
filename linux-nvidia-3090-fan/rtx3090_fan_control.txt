@@ -1,0 +1,73 @@
+RTX 3090 Fan Control - Ubuntu
+==============================
+
+STEP 1: Enable Coolbits (already done)
+---------------------------------------
+sudo nvidia-xconfig --cool-bits=4 --allow-empty-initial-configuration
+# Then reboot for changes to take effect
+
+
+STEP 2: Set Fan Speed
+----------------------
+# Enable manual fan control + set speed (e.g. 70%)
+nvidia-settings -a GPUFanControlState=1 -a GPUTargetFanSpeed=70
+
+# Target 3090 specifically (all 3 fans):
+nvidia-settings -a '[gpu:0]/GPUFanControlState=1' \
+  -a '[fan:0]/GPUTargetFanSpeed=70' \
+  -a '[fan:1]/GPUTargetFanSpeed=70' \
+  -a '[fan:2]/GPUTargetFanSpeed=70'
+
+
+STEP 3: Check Current Fan Speed
+---------------------------------
+nvidia-settings -q GPUCurrentFanSpeed
+# or in RPM:
+nvidia-settings -q GPUCurrentFanSpeedRPM
+
+
+STEP 4: Reset to Auto (when done)
+-----------------------------------
+nvidia-settings -a GPUFanControlState=0
+
+
+NOTES
+------
+- nvidia-settings requires an active X display session (won't work over plain SSH)
+- Over SSH, use: ssh -Y or add --display :0 to the nvidia-settings command
+  e.g. nvidia-settings --display :0 -a GPUFanControlState=1 -a GPUTargetFanSpeed=70
+- To make fan speed persist on login, add the command to ~/.xprofile:
+  nvidia-settings -a GPUFanControlState=1 -a GPUTargetFanSpeed=70 &
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  241  sudo nano /etc/X11/Xwrapper.config
+  242  nvidia-settings -c :1 -a '[gpu:0]/GPUFanControlState=1' -a '[fan:0]/GPUTargetFanSpeed=50' -a '[fan:1]/GPUTargetFanSpeed=50'
+  243  nividi-smi
+  244  nvidia-smi
+  245  history
+foobar@3090:~$ 
+
+
+
+foobar@3090:~$ nvidia-settings -c :1 -a '[gpu:0]/GPUFanControlState=1' -a '[fan:0]/GPUTargetFanSpeed=50' -a '[fan:1]/GPUTargetFanSpeed=50'
+
+  Attribute 'GPUFanControlState' (3090:1[gpu:0]) assigned value 1.
+
+  Attribute 'GPUTargetFanSpeed' (3090:1[fan:0]) assigned value 50.
+
+  Attribute 'GPUTargetFanSpeed' (3090:1[fan:1]) assigned value 50.
+
+foobar@3090:~$ 
+
